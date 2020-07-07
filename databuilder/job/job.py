@@ -75,6 +75,7 @@ class DefaultJob(Job):
 
         except Exception as e:
             is_success = False
+            logging.error(e, exc_info=True)
             raise e
         finally:
             # TODO: If more metrics are needed on different construct, such as task, consider abstracting this out
