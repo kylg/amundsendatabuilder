@@ -14,7 +14,7 @@ It contains several jobs:
   and pubishes it into elasticsearch.
 
 For other available extractors, please take a look at
-https://github.com/lyft/amundsendatabuilder#list-of-extractors
+https://github.com/kylg/amundsendatabuilder#list-of-extractors
 """
 
 import logging

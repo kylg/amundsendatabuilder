@@ -47,7 +47,7 @@ setup(
     name='amundsen-databuilder',
     version=__version__,
     description='Amundsen Data builder',
-    url='https://www.github.com/lyft/amundsendatabuilder',
+    url='https://www.github.com/kylg/amundsendatabuilder',
     maintainer='Lyft',
     maintainer_email='dev@lyft.com',
     packages=find_packages(exclude=['tests*']),
