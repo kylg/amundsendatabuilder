@@ -23,6 +23,10 @@ from airflow.contrib.operators.databricks_operator import DatabricksSubmitRunOpe
 from airflow.operators.bash_operator import BashOperator
 import airflow.utils.dates
 
+import os
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+
 LOGGER = logging.getLogger(__name__)
 
 default_args = {
@@ -44,12 +48,16 @@ dag = DAG(
     schedule_interval='@daily', catchup=False)
 
 # NEO4J cluster endpoints
-neo4j_endpoint = 'bolt://10.216.61.59:31010'
+#neo4j_endpoint = 'bolt://168.63.93.64:7687'
+neo4j_endpoint = 'bolt://10.216.61.58:31010'
+
 
 neo4j_user = 'neo4j'
 neo4j_password = 'test'
 
-ES_HOST = '10.216.61.59'
+#ES_HOST = '168.63.93.64'
+# ES_PORT = 9200
+ES_HOST = '10.216.61.58'
 ES_PORT = 31020
 
 # Todo: user provides a list of schema for indexing
@@ -73,7 +81,7 @@ def collect_tblinfo_task_parameters():
     return {
         'today': '{{ ds }}',
         'export_path': EXPORT_PATH,
-        'export_dbfs_path': DBFS_CSV_PATH
+        'export_csv_path': DBFS_CSV_PATH
     }
 
 

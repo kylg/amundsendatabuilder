@@ -2,9 +2,12 @@ import logging
 from collections import namedtuple
 from typing import Iterator, Union, Dict, Any  # noqa: F401
 
+
 from databuilder import Scoped
 from databuilder.extractor.base_extractor import Extractor
+from databuilder.models.table_last_updated import TableLastUpdated
 from databuilder.models.table_metadata import TableMetadata, ColumnMetadata
+from databuilder.models.watermark import Watermark
 from itertools import groupby
 
 
@@ -57,6 +60,7 @@ class SparksqlTableMetadataExtractor(Extractor):
         Using itertools.groupby and raw level iterator, it groups to table and yields TableMetadata
         :return:
         """
+        cluster = 'northeurope'
         for key, group in groupby(iter(self.content), self._get_table_key):
             columns = []
             partitionKeys = []
@@ -71,15 +75,24 @@ class SparksqlTableMetadataExtractor(Extractor):
             partitionStr = ""
             if len(partitionKeys)>0:
                 partitionStr = ",".join(partitionKeys)
-            yield TableMetadata(last_row[self.posDict['dbName']], 'northeurope',
-                                last_row[self.posDict['dbName']],
-                                last_row[self.posDict['tblName']],
+            LOGGER.debug("partitionStr="+partitionStr)
+            dbName = last_row[self.posDict['dbName']]
+            tblName = last_row[self.posDict['tblName']]
+
+            yield TableMetadata(dbName, cluster, dbName, tblName,
                                 last_row[self.posDict['tblDesc']],
                                 columns,
                                 is_view=is_view,
                                 partitionKeys=partitionStr,
-                                tblLocation=last_row[self.posDict["tblLocation"]]
-                                )
+                                tblLocation=last_row[self.posDict["tblLocation"]])
+            yield TableLastUpdated(tblName,
+                                   last_row[self.posDict['lastUpdateTime']],
+                                   dbName, dbName, cluster)
+
+            yield Watermark(last_row[self.posDict['p0Time']], dbName, dbName, tblName,
+                            last_row[self.posDict['p0Name']], 'low_watermark', cluster)
+            yield Watermark(last_row[self.posDict['p1Time']], dbName, dbName, tblName,
+                            last_row[self.posDict['p1Name']], 'high_watermark', cluster)
 
     def _get_table_key(self, row):
         # type: (Dict[str, Any]) -> Union[TableKey, None]

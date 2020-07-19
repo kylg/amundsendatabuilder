@@ -98,7 +98,7 @@ DEFAULT_CONFIG = ConfigFactory.from_dict({NEO4J_TRANSCATION_SIZE: 500,
                                           NEO4J_VALIDATE_SSL: False,
                                           RELATION_PREPROCESSOR: NoopRelationPreprocessor()})
 
-NODE_MERGE_TEMPLATE = Template("""MERGE (node:$LABEL {key: '${KEY}'})
+NODE_MERGE_TEMPLATE = Template("""MERGE (node:$LABEL {key: "${KEY}"})
 ON CREATE SET ${create_prop_body}
 ${update_statement}""")
 
@@ -226,6 +226,10 @@ class Neo4jCsvPublisher(Publisher):
         # type: () -> str
         return 'publisher.neo4j'
 
+    def utf_8_encoder(self, unicode_csv_data):
+        for line in unicode_csv_data:
+            yield line.encode('utf-8')
+
     def _create_indices(self, node_file):
         """
         Go over the node file and try creating unique index
@@ -234,9 +238,14 @@ class Neo4jCsvPublisher(Publisher):
         """
         # type: (str) -> None
         LOGGER.info('Creating indices. (Existing indices will be ignored)')
-
         with open(node_file, 'r', encoding='utf8') as node_csv:
-            for node_record in csv.DictReader(node_csv):
+            if six.PY2:
+                LOGGER.info("python2====utf8 encoding manually")
+                data_iter = self.utf_8_encoder(node_csv)
+            else:
+                LOGGER.info("not python2====utf8 encoding by default")
+                data_iter = node_csv
+            for node_record in csv.DictReader(data_iter):
                 label = node_record[NODE_LABEL_KEY]
                 if label not in self.labels:
                     self._try_create_index(label)
@@ -262,9 +271,14 @@ class Neo4jCsvPublisher(Publisher):
         :param node_file:
         :return:
         """
-
         with open(node_file, 'r', encoding='utf8') as node_csv:
-            for count, node_record in enumerate(csv.DictReader(node_csv)):
+            if six.PY2:
+                LOGGER.info("python2====utf8 encoding manually")
+                data_iter = self.utf_8_encoder(node_csv)
+            else:
+                LOGGER.info("not python2====utf8 encoding by default")
+                data_iter = node_csv
+            for count, node_record in enumerate(csv.DictReader(data_iter)):
                 stmt = self.create_node_merge_statement(node_record=node_record)
                 tx = self._execute_statement(stmt, tx)
         return tx
@@ -296,7 +310,7 @@ class Neo4jCsvPublisher(Publisher):
             update_prop_body = self._create_props_body(node_record, NODE_REQUIRED_KEYS, 'node')
             update_statement = NODE_UPDATE_TEMPLATE.substitute(update_prop_body=update_prop_body)
         params['update_statement'] = update_statement
-
+        params['KEY'] = params['KEY'].replace("'", "\\'")
         return NODE_MERGE_TEMPLATE.substitute(params)
 
     def _publish_relation(self, relation_file, tx):
@@ -320,7 +334,14 @@ class Neo4jCsvPublisher(Publisher):
 
             count = 0
             with open(relation_file, 'r', encoding='utf8') as relation_csv:
-                for rel_record in csv.DictReader(relation_csv):
+                if six.PY2:
+                    LOGGER.info("python2====utf8 encoding manually")
+                    data_iter = self.utf_8_encoder(relation_csv)
+                else:
+                    LOGGER.info("not python2====utf8 encoding by default")
+                    data_iter = relation_csv
+
+                for rel_record in csv.DictReader(data_iter):
                     stmt, params = self._relation_preprocessor.preprocess_cypher(
                         start_label=rel_record[RELATION_START_LABEL],
                         end_label=rel_record[RELATION_END_LABEL],
@@ -336,7 +357,14 @@ class Neo4jCsvPublisher(Publisher):
             LOGGER.info('Executed pre-processing Cypher statement {} times'.format(count))
 
         with open(relation_file, 'r', encoding='utf8') as relation_csv:
-            for count, rel_record in enumerate(csv.DictReader(relation_csv)):
+            if six.PY2:
+                LOGGER.info("python2====utf8 encoding manually")
+                data_iter = self.utf_8_encoder(relation_csv)
+            else:
+                LOGGER.info("not python2====utf8 encoding by default")
+                data_iter = relation_csv
+
+            for count, rel_record in enumerate(csv.DictReader(data_iter)):
                 stmt = self.create_relationship_merge_statement(rel_record=rel_record)
                 tx = self._execute_statement(stmt, tx,
                                              expect_result=self._confirm_rel_created)
@@ -364,7 +392,8 @@ class Neo4jCsvPublisher(Publisher):
             param['PROP_STMT'] = """ON CREATE SET {create_prop_body}
 ON MATCH SET {update_prop_body}""".format(create_prop_body=create_prop_body,
                                           update_prop_body=update_prop_body)
-
+        param['START_KEY'] = param['START_KEY'].replace("'", "\\'")
+        param['END_KEY'] = param['END_KEY'].replace("'", "\\'")
         return RELATION_MERGE_TEMPLATE.substitute(param)
 
     def _create_props_body(self,
