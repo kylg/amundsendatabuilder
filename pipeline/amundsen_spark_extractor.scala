@@ -41,10 +41,10 @@ def loadTableDefs(spark: SparkSession): DataFrame = {
               val formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
               p0_name = ps(0).spec.map { case (k, v) => s"$k=$v" }.mkString(",")
               import java.util.Date
-              p0_time = formatter.format(new Date(ps(0).createTime * 1000))
+              p0_time = formatter.format(new Date(ps(0).createTime))
 
               p1_name = ps(ps.size - 1).spec.map { case (k, v) => s"$k=$v" }.mkString(", ")
-              p1_time = formatter.format(new Date(ps(ps.size - 1).createTime * 1000))
+              p1_time = formatter.format(new Date(ps(ps.size - 1).createTime))
             }
           }
         }

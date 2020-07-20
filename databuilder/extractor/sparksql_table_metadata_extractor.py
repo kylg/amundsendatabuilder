@@ -66,7 +66,7 @@ class SparksqlTableMetadataExtractor(Extractor):
             partitionKeys = []
             for row in group:
                 last_row = row
-                if(row[self.posDict["isPartition"]] != 'false'):
+                if row[self.posDict["isPartition"]] != 'false':
                     partitionKeys.append(row[self.posDict["colName"]])
                 columns.append(ColumnMetadata(row[self.posDict["colName"]], row[self.posDict["colDesc"]],
                                               row[self.posDict["colType"]], row[self.posDict["colSortOrder"]]))
