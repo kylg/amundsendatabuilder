@@ -85,14 +85,16 @@ class SparksqlTableMetadataExtractor(Extractor):
                                 is_view=is_view,
                                 partitionKeys=partitionStr,
                                 tblLocation=last_row[self.posDict["tblLocation"]])
-            yield TableLastUpdated(tblName,
-                                   last_row[self.posDict['lastUpdateTime']],
-                                   dbName, dbName, cluster)
 
-            yield Watermark(last_row[self.posDict['p0Time']], dbName, dbName, tblName,
-                            last_row[self.posDict['p0Name']], 'low_watermark', cluster)
-            yield Watermark(last_row[self.posDict['p1Time']], dbName, dbName, tblName,
-                            last_row[self.posDict['p1Name']], 'high_watermark', cluster)
+            if last_row[self.posDict['lastUpdateTime']] > 0:
+                yield TableLastUpdated(tblName,
+                                       last_row[self.posDict['lastUpdateTime']],
+                                       dbName, dbName, cluster)
+            if last_row[self.posDict['p0Name']] is not None and last_row[self.posDict['p0Name']] != '':
+                yield Watermark(last_row[self.posDict['p0Time']], dbName, dbName, tblName,
+                                last_row[self.posDict['p0Name']], 'low_watermark', cluster)
+                yield Watermark(last_row[self.posDict['p1Time']], dbName, dbName, tblName,
+                                last_row[self.posDict['p1Name']], 'high_watermark', cluster)
 
     def _get_table_key(self, row):
         # type: (Dict[str, Any]) -> Union[TableKey, None]
