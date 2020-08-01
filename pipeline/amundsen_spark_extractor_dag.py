@@ -31,7 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 default_args = {
     'owner': 'amundsen',
-    'start_date': airflow.utils.dates.days_ago(2),
+    'start_date': airflow.utils.dates.days_ago(1),
     'depends_on_past': False,
     'email': [''],
     'email_on_failure': False,
@@ -48,17 +48,17 @@ dag = DAG(
     schedule_interval='@daily', catchup=False)
 
 # NEO4J cluster endpoints
-#neo4j_endpoint = 'bolt://168.63.93.64:7687'
-neo4j_endpoint = 'bolt://10.216.61.58:31010'
+neo4j_endpoint = 'bolt://168.63.93.64:7687'
+# neo4j_endpoint = 'bolt://10.216.61.58:31010'
 
 
 neo4j_user = 'neo4j'
 neo4j_password = 'test'
 
-#ES_HOST = '168.63.93.64'
-# ES_PORT = 9200
-ES_HOST = '10.216.61.58'
-ES_PORT = 31020
+ES_HOST = '168.63.93.64'
+ES_PORT = 9200
+# ES_HOST = '10.216.61.58'
+# ES_PORT = 31020
 
 # Todo: user provides a list of schema for indexing
 SUPPORTED_HIVE_SCHEMAS = ['hive']
@@ -68,6 +68,7 @@ SUPPORTED_HIVE_SCHEMA_SQL_IN_CLAUSE = "('{schemas}')".format(schemas="', '".join
 
 EXPORT_PATH = "dbfs:/tmp/pf/tbl_def/"
 DBFS_CSV_PATH = "dbfs:/tmp/pf/tbl_def_csv"
+db_groups = 4
 
 tmp_folder = '/var/tmp/amundsen/table_metadata'
 
@@ -81,7 +82,8 @@ def collect_tblinfo_task_parameters():
     return {
         'today': '{{ ds }}',
         'export_path': EXPORT_PATH,
-        'export_csv_path': DBFS_CSV_PATH
+        'export_csv_path': DBFS_CSV_PATH,
+        'db_groups': db_groups
     }
 
 
@@ -109,7 +111,7 @@ def get_make_localdirs_func(task_name, dag):
 
 def get_download_csv_func(task_name, dag):
     task = BashOperator(task_id=task_name, dag=dag,
-                        bash_command="dbfs cp --overwrite {dbfsPath}/{csvFile}.csv {basePath}/csv/".format(
+                        bash_command="dbfs cp -r --overwrite {dbfsPath}/{csvFile} {basePath}/csv/".format(
                             dbfsPath=DBFS_CSV_PATH, csvFile='{{ ds }}', basePath=tmp_folder))
     return task
 
@@ -123,6 +125,7 @@ def create_neo4j(**kwargs):
     """
     LOGGER.info(kwargs)
     exec_day = kwargs["ds"]
+    file_no = kwargs["file_no"]
 
     # Adding to where clause to scope schema, filter out temp tables which start with numbers and views
     where_clause_suffix = textwrap.dedent("""
@@ -131,8 +134,8 @@ def create_neo4j(**kwargs):
         AND t.TBL_TYPE IN ( 'EXTERNAL_TABLE', 'MANAGED_TABLE' )
     """).format(schemas=SUPPORTED_HIVE_SCHEMA_SQL_IN_CLAUSE)
     LOGGER.info("======exec_day=" + str(exec_day))
-    node_files_folder = '{basePath}/nodes/'.format(basePath=tmp_folder)
-    relationship_files_folder = '{basePath}/relationships/'.format(basePath=tmp_folder)
+    node_files_folder = '{basePath}/nodes_{file_no}/'.format(basePath=tmp_folder, file_no=file_no)
+    relationship_files_folder = '{basePath}/relationships_{file_no}/'.format(basePath=tmp_folder, file_no=file_no)
 
     job_config = ConfigFactory.from_dict({
         'loader.filesystem_csv_neo4j.{}'.format(FsNeo4jCSVLoader.NODE_DIR_PATH):
@@ -151,9 +154,9 @@ def create_neo4j(**kwargs):
             neo4j_password,
         'publisher.neo4j.{}'.format(neo4j_csv_publisher.NEO4J_CREATE_ONLY_NODES):
             [DESCRIPTION_NODE_LABEL],
-        'extractor.sparksql_table_metadata.csv_file_path': "{basePath}/csv/{data_day}.csv".format(basePath=tmp_folder,
-                                                                                                  data_day=str(
-                                                                                                      exec_day)),
+        'extractor.sparksql_table_metadata.csv_file_path': "{basePath}/csv/{data_day}-{file_no}.csv".format(basePath=tmp_folder,
+                                                                                                  data_day=str(exec_day),
+                                                                                                            file_no=file_no),
         'publisher.neo4j.job_publish_tag': str(exec_day)
     })
 
@@ -163,12 +166,14 @@ def create_neo4j(**kwargs):
     job.launch()
 
 
-def create_neo4j_task(task_name, dag):
+def create_neo4j_task(task_name, dag, file_no):
+    op_kwargs = {"file_no":file_no}
     task = PythonOperator(
-        task_id=task_name,
+        task_id=task_name+"_"+str(file_no),
         python_callable=create_neo4j,
         provide_context=True,
-        dag=dag
+        dag=dag,
+        op_kwargs=op_kwargs
     )
     return task
 
@@ -244,6 +249,9 @@ def create_elasticsearch_task(task_name, dag):
 collect_tblinfo_task = get_collect_tblinfo_func("collect_tblinfo", dag)
 mk_localdirs_task = get_make_localdirs_func("make_localdirs", dag)
 download_csv_task = get_download_csv_func("download_csv", dag)
-create_metadata_task = create_neo4j_task('create_metadata', dag)
+create_metadata_task_0 = create_neo4j_task('create_metadata', dag, 0)
+create_metadata_task_1 = create_neo4j_task('create_metadata', dag, 1)
+create_metadata_task_2 = create_neo4j_task('create_metadata', dag, 2)
+create_metadata_task_3 = create_neo4j_task('create_metadata', dag, 3)
 create_index_task = create_elasticsearch_task('create_index', dag)
-collect_tblinfo_task >> mk_localdirs_task >> download_csv_task >> create_metadata_task >> create_index_task
+collect_tblinfo_task >> mk_localdirs_task >> download_csv_task >> create_metadata_task_0 >> create_metadata_task_1 >> create_metadata_task_2 >> create_metadata_task_3 >> create_index_task

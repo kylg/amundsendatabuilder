@@ -7,6 +7,7 @@ from databuilder import Scoped
 from databuilder.extractor.base_extractor import Extractor
 from databuilder.models.table_last_updated import TableLastUpdated
 from databuilder.models.table_metadata import TableMetadata, ColumnMetadata
+from databuilder.models.table_stats import TableColumnStats
 from databuilder.models.watermark import Watermark
 from itertools import groupby
 
@@ -64,12 +65,14 @@ class SparksqlTableMetadataExtractor(Extractor):
         for key, group in groupby(iter(self.content), self._get_table_key):
             columns = []
             partitionKeys = []
+            colStats = []
             for row in group:
                 last_row = row
                 if row[self.posDict["isPartition"]] != 'false':
                     partitionKeys.append(row[self.posDict["colName"]])
                 columns.append(ColumnMetadata(row[self.posDict["colName"]], row[self.posDict["colDesc"]],
                                               row[self.posDict["colType"]], row[self.posDict["colSortOrder"]]))
+                self._createStats(row, cluster, colStats)
 
             is_view = last_row[self.posDict["isView"]] == 'true'
             partitionStr = ""
@@ -95,6 +98,33 @@ class SparksqlTableMetadataExtractor(Extractor):
                                 last_row[self.posDict['p0Name']], 'low_watermark', cluster)
                 yield Watermark(last_row[self.posDict['p1Time']], dbName, dbName, tblName,
                                 last_row[self.posDict['p1Name']], 'high_watermark', cluster)
+            for colStat in colStats:
+                yield colStat
+
+    def _createStats(self, row, cluster, colStats):
+        # nullCount:BigInt, distinctCount:BigInt, max:String, min:String, avgLen:Any, maxLen:Any
+        dbName = row[self.posDict["dbName"]]
+        tblName = row[self.posDict['tblName']]
+        colName = row[self.posDict["colName"]]
+        nullCount = row[self.posDict["nullCount"]]
+        distinctCount = row[self.posDict["distinctCount"]]
+        max = row[self.posDict["max"]]
+        min = row[self.posDict["min"]]
+        avgLen = row[self.posDict["avgLen"]]
+        maxLen = row[self.posDict["maxLen"]]
+        LOGGER.info("stat==="+str(nullCount)+","+str(distinctCount)+","+str(max)+","+str(min)+","+str(avgLen)+","+str(maxLen))
+        if nullCount is not None and len(str(nullCount).strip()) > 0:
+            colStats.append(TableColumnStats(tblName, colName, "nullCount", str(nullCount), 0, 0, dbName, cluster, dbName))
+        if distinctCount is not None and len(str(distinctCount).strip()) > 0:
+            colStats.append(TableColumnStats(tblName, colName, "distinctCount", str(distinctCount), 0, 0, dbName, cluster, dbName))
+        if max is not None and len(str(max).strip()) > 0:
+            colStats.append(TableColumnStats(tblName, colName, "max", str(max), 0, 0, dbName, cluster, dbName))
+        if min is not None and len(str(min).strip()) > 0:
+            colStats.append(TableColumnStats(tblName, colName, "min", str(min), 0, 0, dbName, cluster, dbName))
+        if avgLen is not None and len(str(avgLen).strip()) > 0:
+            colStats.append(TableColumnStats(tblName, colName, "avgLen", str(avgLen), 0, 0, dbName, cluster, dbName))
+        if maxLen is not None and len(str(maxLen).strip()) > 0:
+            colStats.append(TableColumnStats(tblName, colName, "maxLen", str(maxLen), 0, 0, dbName, cluster, dbName))
 
     def _get_table_key(self, row):
         # type: (Dict[str, Any]) -> Union[TableKey, None]
