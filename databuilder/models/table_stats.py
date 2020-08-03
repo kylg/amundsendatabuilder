@@ -87,7 +87,7 @@ class TableColumnStats(Neo4jCsvSerializable):
         results = [{
             NODE_KEY: self.get_table_stat_model_key(),
             NODE_LABEL: TableColumnStats.LABEL,
-            'stat_val:': self.stat_val,
+            'stat_val': self.stat_val,
             'stat_name': self.stat_name,
             'start_epoch': self.start_epoch,
             'end_epoch': self.end_epoch,
