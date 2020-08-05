@@ -9,6 +9,8 @@ from databuilder.models.table_last_updated import TableLastUpdated
 from databuilder.models.table_metadata import TableMetadata, ColumnMetadata
 from databuilder.models.table_stats import TableColumnStats
 from databuilder.models.watermark import Watermark
+from databuilder.models.table_source import TableSource
+from databuilder.models.table_generator import TableGenerator
 from itertools import groupby
 
 
@@ -98,6 +100,10 @@ class SparksqlTableMetadataExtractor(Extractor):
                                 last_row[self.posDict['p0Name']], 'low_watermark', cluster)
                 yield Watermark(last_row[self.posDict['p1Time']], dbName, dbName, tblName,
                                 last_row[self.posDict['p1Name']], 'high_watermark', cluster)
+            if last_row[self.posDict['pipeline']] is not None and last_row[self.posDict['pipeline']] != '':
+                source, generator = self._create_source_generator(dbName, dbName, tblName, cluster, last_row[self.posDict['pipeline']])
+                yield source
+                yield generator
             for colStat in colStats:
                 yield colStat
 
@@ -125,6 +131,11 @@ class SparksqlTableMetadataExtractor(Extractor):
             colStats.append(TableColumnStats(tblName, colName, "avgLen", str(avgLen), 0, 0, dbName, cluster, dbName))
         if maxLen is not None and len(str(maxLen).strip()) > 0:
             colStats.append(TableColumnStats(tblName, colName, "maxLen", str(maxLen), 0, 0, dbName, cluster, dbName))
+
+    def _create_source_generator(self, db_name, schema, table_name, cluster, pipeline):
+        source = TableSource(db_name, schema, table_name, cluster,  'https://bitbucket.edp.electrolux.io/projects/GDSP/repos/airflow-etl/browse/gfk', 'bitbucket')
+        generator = TableGenerator(db_name, schema, table_name, cluster,  'https://137.117.198.47:8090/admin/airflow/tree?dag_id=digital_marketing_ga_all_pipeline', 'airflow')
+        return source, generator
 
     def _get_table_key(self, row):
         # type: (Dict[str, Any]) -> Union[TableKey, None]
