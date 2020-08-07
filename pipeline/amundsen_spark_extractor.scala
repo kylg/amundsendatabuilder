@@ -20,7 +20,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 
 case class ColumnDef(tblId: String, dbName: String, tblName: String, tblType: String, tblDesc: String, tblLocation: String,
                      colName: String, colSortOrder: Int, colType: String, colDesc: String, isPartition: Boolean,
-                     isView: Boolean, compressType: String, lastUpdateTime: Long, p0Name: String, p0Time: String, p1Name: String,
+                     isView: Boolean, compressType: String, lastUpdateTime: Long, pipeline:String, source:String, p0Name: String, p0Time: String, p1Name: String,
                      p1Time: String, nullCount:String, distinctCount:String, max:String, min:String, avgLen:String, maxLen:String)
 
 def loadTableDefs(spark: SparkSession, groupNum:Int): Iterator[(DataFrame, Int)] = {
@@ -64,6 +64,8 @@ def loadTblDefsByDb(spark: SparkSession, db:String) = {
         }
       }
       val lastUpdateTime = tblObj.properties.getOrElse("transient_lastDdlTime", "0").toLong
+      val pipeline_name = tblObj.properties.getOrElse("pipeline_name", null)
+      val source = tblObj.properties.getOrElse("source", null)
 
       val colStats = extractColStats(tblObj)
       tblObj.dataSchema.fields.map(f => {
@@ -73,12 +75,12 @@ def loadTblDefsByDb(spark: SparkSession, db:String) = {
           ColumnDef("", db, tbl, tblObj.tableType.name, tblObj.comment.getOrElse(""), locationStr,
             f.name, 0, f.dataType.simpleString, f.getComment().getOrElse(""),
             isPartition, "VIEW".equals(tblObj.tableType.name), tblObj.provider.getOrElse(""), lastUpdateTime,
-            p0_name, p0_time, p1_name, p1_time, stat._1, stat._2, stat._3, stat._4, stat._5, stat._6)
+            pipeline_name, source, p0_name, p0_time, p1_name, p1_time, stat._1, stat._2, stat._3, stat._4, stat._5, stat._6)
         }else{
           ColumnDef("", db, tbl, tblObj.tableType.name, tblObj.comment.getOrElse(""), locationStr,
             f.name, 0, f.dataType.simpleString, f.getComment().getOrElse(""),
             isPartition, "VIEW".equals(tblObj.tableType.name), tblObj.provider.getOrElse(""), lastUpdateTime,
-            p0_name, p0_time, p1_name, p1_time, null, null, null, null, null, null)
+            pipeline_name, source, p0_name, p0_time, p1_name, p1_time, null, null, null, null, null, null)
         }
 
       })
@@ -86,7 +88,7 @@ def loadTblDefsByDb(spark: SparkSession, db:String) = {
       case x: Exception => {
         println("============error retrieve table info: " + tbl)
         println(x)
-        List(ColumnDef("", db, tbl, "", "", "", "", 0, "", "", false, false, "", 0, "", "", "", "", null, null, null, null, null, null))
+        List(ColumnDef("", db, tbl, "", "", "", "", 0, "", "", false, false, "", 0, null, null, "", "", "", "", null, null, null, null, null, null))
       }
     }
   }).filter(c => !"".equals(c.colName))

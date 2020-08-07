@@ -24,8 +24,8 @@ from airflow.operators.bash_operator import BashOperator
 import airflow.utils.dates
 
 import os
-os.environ["PYTHONIOENCODING"] = "utf-8"
 
+os.environ["PYTHONIOENCODING"] = "utf-8"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +71,9 @@ DBFS_CSV_PATH = "dbfs:/tmp/pf/tbl_def_csv"
 db_groups = 4
 
 tmp_folder = '/var/tmp/amundsen/table_metadata'
+
+airflow_servers = [
+    {"host": "10.1.0.5", "port":"3306", "user":"airuser", "password":"Azure123?", "server": "https://40.69.221.124:8090"}]
 
 
 # Todo: user needs to modify and provide a hivemetastore connection string
@@ -154,9 +157,11 @@ def create_neo4j(**kwargs):
             neo4j_password,
         'publisher.neo4j.{}'.format(neo4j_csv_publisher.NEO4J_CREATE_ONLY_NODES):
             [DESCRIPTION_NODE_LABEL],
-        'extractor.sparksql_table_metadata.csv_file_path': "{basePath}/csv/{data_day}-{file_no}.csv".format(basePath=tmp_folder,
-                                                                                                  data_day=str(exec_day),
-                                                                                                            file_no=file_no),
+        'extractor.sparksql_table_metadata.csv_file_path': "{basePath}/csv/{data_day}-{file_no}.csv".format(
+            basePath=tmp_folder,
+            data_day=str(exec_day),
+            file_no=file_no),
+        'extractor.sparksql_table_metadata.airflow_servers': airflow_servers,
         'publisher.neo4j.job_publish_tag': str(exec_day)
     })
 
@@ -167,9 +172,9 @@ def create_neo4j(**kwargs):
 
 
 def create_neo4j_task(task_name, dag, file_no):
-    op_kwargs = {"file_no":file_no}
+    op_kwargs = {"file_no": file_no}
     task = PythonOperator(
-        task_id=task_name+"_"+str(file_no),
+        task_id=task_name + "_" + str(file_no),
         python_callable=create_neo4j,
         provide_context=True,
         dag=dag,
