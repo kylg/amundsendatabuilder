@@ -48,17 +48,21 @@ dag = DAG(
     schedule_interval='@daily', catchup=False)
 
 # NEO4J cluster endpoints
-neo4j_endpoint = 'bolt://168.63.93.64:7687'
-# neo4j_endpoint = 'bolt://10.216.61.58:31010'
-
-
 neo4j_user = 'neo4j'
 neo4j_password = 'test'
 
-ES_HOST = '168.63.93.64'
-ES_PORT = 9200
-# ES_HOST = '10.216.61.58'
-# ES_PORT = 31020
+#neo4j_endpoint = 'bolt://168.63.93.64:7687'
+#ES_HOST = '168.63.93.64'
+#ES_PORT = 9200
+# airflow_servers = [{"host": "10.1.0.5", "port":"3306", "user":"airuser", "password":"Azure123?", "server": "https://40.69.221.124:8090"}]
+
+neo4j_endpoint = 'bolt://10.216.61.58:31010'
+ES_HOST = '10.216.61.58'
+ES_PORT = 31020
+airflow_servers = [{"host": "localhost", "port":"3306", "user":"airflow", "password":"airflow", "server": "http://10.216.61.36:8080/"}]
+
+default_airflow_server = "https://40.69.221.124:8090"
+
 
 # Todo: user provides a list of schema for indexing
 SUPPORTED_HIVE_SCHEMAS = ['hive']
@@ -68,12 +72,9 @@ SUPPORTED_HIVE_SCHEMA_SQL_IN_CLAUSE = "('{schemas}')".format(schemas="', '".join
 
 EXPORT_PATH = "dbfs:/tmp/pf/tbl_def/"
 DBFS_CSV_PATH = "dbfs:/tmp/pf/tbl_def_csv"
-db_groups = 4
+tbl_groups = 4
 
 tmp_folder = '/var/tmp/amundsen/table_metadata'
-
-airflow_servers = [
-    {"host": "10.1.0.5", "port":"3306", "user":"airuser", "password":"Azure123?", "server": "https://40.69.221.124:8090"}]
 
 
 # Todo: user needs to modify and provide a hivemetastore connection string
@@ -86,7 +87,7 @@ def collect_tblinfo_task_parameters():
         'today': '{{ ds }}',
         'export_path': EXPORT_PATH,
         'export_csv_path': DBFS_CSV_PATH,
-        'db_groups': db_groups
+        'tbl_groups': tbl_groups
     }
 
 
@@ -95,7 +96,7 @@ def get_collect_tblinfo_func(task_name, dag):
         'existing_cluster_id': "1021-080656-hawks801",
         # 'new_cluster': new_cluster,
         'notebook_task': {
-            'notebook_path': "/DigitalMarketing/test_ci/amundsen_spark_extractor",
+            'notebook_path': "/platform/amundsen/amundsen_databuilder_spark",
             'base_parameters': collect_tblinfo_task_parameters()
         },
         'libraries': []
@@ -162,6 +163,7 @@ def create_neo4j(**kwargs):
             data_day=str(exec_day),
             file_no=file_no),
         'extractor.sparksql_table_metadata.airflow_servers': airflow_servers,
+        'extractor.sparksql_table_metadata.default_airflow_server': default_airflow_server,
         'publisher.neo4j.job_publish_tag': str(exec_day)
     })
 
@@ -258,5 +260,7 @@ create_metadata_task_0 = create_neo4j_task('create_metadata', dag, 0)
 create_metadata_task_1 = create_neo4j_task('create_metadata', dag, 1)
 create_metadata_task_2 = create_neo4j_task('create_metadata', dag, 2)
 create_metadata_task_3 = create_neo4j_task('create_metadata', dag, 3)
+create_metadata_task_4 = create_neo4j_task('create_metadata', dag, 4)
+create_metadata_task_5 = create_neo4j_task('create_metadata', dag, 5)
 create_index_task = create_elasticsearch_task('create_index', dag)
-collect_tblinfo_task >> mk_localdirs_task >> download_csv_task >> create_metadata_task_0 >> create_metadata_task_1 >> create_metadata_task_2 >> create_metadata_task_3 >> create_index_task
+collect_tblinfo_task >> mk_localdirs_task >> download_csv_task >> create_metadata_task_0 >> create_metadata_task_1 >> create_metadata_task_2 >> create_metadata_task_3 >> create_metadata_task_4 >> create_metadata_task_5 >> create_index_task

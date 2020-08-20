@@ -35,6 +35,7 @@ class SparksqlTableMetadataExtractor(Extractor):
     def init(self, conf):
         csv_file = conf.get_string("csv_file_path")
         self.airflow_servers = conf.get("airflow_servers")
+        self.default_airflow_server = conf.get("default_airflow_server")
         self._init_airflow_ids()
         import csv
         with open(csv_file) as f:
@@ -81,7 +82,7 @@ class SparksqlTableMetadataExtractor(Extractor):
     def get_airflow_link(self, dag_id):
         if dag_id in self.dag_defs.keys():
             return self.dag_defs[dag_id].url
-        return None
+        return "{server}/tree?dag_id={dag_id}".format(server=self.default_airflow_server, dag_id=dag_id)
 
     def extract(self):
         # type: () -> Union[TableMetadata, None]
