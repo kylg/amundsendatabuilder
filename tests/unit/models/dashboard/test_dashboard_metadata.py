@@ -1,3 +1,6 @@
+# Copyright Contributors to the Amundsen project.
+# SPDX-License-Identifier: Apache-2.0
+
 import copy
 import unittest
 
@@ -5,8 +8,7 @@ from databuilder.models.dashboard.dashboard_metadata import DashboardMetadata
 
 
 class TestDashboardMetadata(unittest.TestCase):
-    def setUp(self):
-        # type: () -> None
+    def setUp(self) -> None:
         # Full exammple
         self.dashboard_metadata = DashboardMetadata('Product - Jobs.cz',
                                                     'Agent',
@@ -131,8 +133,7 @@ class TestDashboardMetadata(unittest.TestCase):
 
         self.expected_rels3 = copy.deepcopy(self.expected_rels_deduped3)
 
-    def test_serialize(self):
-        # type: () -> None
+    def test_serialize(self) -> None:
         # First test
         node_row = self.dashboard_metadata.next_node()
         actual = []

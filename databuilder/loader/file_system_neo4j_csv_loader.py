@@ -1,23 +1,21 @@
-import six
+# Copyright Contributors to the Amundsen project.
+# SPDX-License-Identifier: Apache-2.0
+
+import csv
 import logging
 import os
 import shutil
-from csv import DictWriter  # noqa: F401
+from csv import DictWriter
 
-from pyhocon import ConfigTree, ConfigFactory  # noqa: F401
-from typing import Dict, Any  # noqa: F401
+from pyhocon import ConfigTree, ConfigFactory
+from typing import Dict, Any
 
 from databuilder.job.base_job import Job
 from databuilder.loader.base_loader import Loader
 from databuilder.models.neo4j_csv_serde import NODE_LABEL, \
     RELATION_START_LABEL, RELATION_END_LABEL, RELATION_TYPE
-from databuilder.models.neo4j_csv_serde import Neo4jCsvSerializable  # noqa: F401
+from databuilder.models.neo4j_csv_serde import Neo4jCsvSerializable
 from databuilder.utils.closer import Closer
-
-if six.PY2:
-    import unicodecsv as csv
-else:
-    import csv
 
 
 LOGGER = logging.getLogger(__name__)
@@ -40,14 +38,12 @@ class FsNeo4jCSVLoader(Loader):
         FORCE_CREATE_DIR: False
     })
 
-    def __init__(self):
-        # type: () -> None
-        self._node_file_mapping = {}  # type: Dict[Any, DictWriter]
-        self._relation_file_mapping = {}  # type: Dict[Any, DictWriter]
+    def __init__(self) -> None:
+        self._node_file_mapping: Dict[Any, DictWriter] = {}
+        self._relation_file_mapping: Dict[Any, DictWriter] = {}
         self._closer = Closer()
 
-    def init(self, conf):
-        # type: (ConfigTree) -> None
+    def init(self, conf: ConfigTree) -> None:
         """
         Initializing FsNeo4jCsvLoader by creating directory for node files
         and relationship files. Note that the directory defined in
@@ -67,8 +63,7 @@ class FsNeo4jCSVLoader(Loader):
         self._create_directory(self._node_dir)
         self._create_directory(self._relation_dir)
 
-    def _create_directory(self, path):
-        # type: (str) -> None
+    def _create_directory(self, path: str) -> None:
         """
         Validate directory does not exist, creates it, register deletion of
         created directory function to Job.closer.
@@ -84,8 +79,7 @@ class FsNeo4jCSVLoader(Loader):
 
         os.makedirs(path)
 
-        def _delete_dir():
-            # type: () -> None
+        def _delete_dir() -> None:
             if not self._delete_created_dir:
                 LOGGER.warn('Skip Deleting directory {}'.format(path))
                 return
@@ -96,8 +90,7 @@ class FsNeo4jCSVLoader(Loader):
         # Directory should be deleted after publish is finished
         Job.closer.register(_delete_dir)
 
-    def load(self, csv_serializable):
-        # type: (Neo4jCsvSerializable) -> None
+    def load(self, csv_serializable: Neo4jCsvSerializable) -> None:
         """
         Writes Neo4jCsvSerializable into CSV files.
         There are multiple CSV files that this method writes.
@@ -143,13 +136,12 @@ class FsNeo4jCSVLoader(Loader):
             relation_dict = csv_serializable.next_relation()
 
     def _get_writer(self,
-                    csv_record_dict,  # type: Dict[str, Any]
-                    file_mapping,  # type: Dict[Any, DictWriter]
-                    key,  # type: Any
-                    dir_path,  # type: str
-                    file_suffix  # type: str
-                    ):
-        # type: (...) -> DictWriter
+                    csv_record_dict: Dict[str, Any],
+                    file_mapping: Dict[Any, DictWriter],
+                    key: Any,
+                    dir_path: str,
+                    file_suffix: str
+                    ) -> DictWriter:
         """
         Finds a writer based on csv record, key.
         If writer does not exist, it's creates a csv writer and update the
@@ -167,18 +159,11 @@ class FsNeo4jCSVLoader(Loader):
 
         LOGGER.info('Creating file for {}'.format(key))
 
-        if six.PY2:
+        file_out = open('{}/{}.csv'.format(dir_path, file_suffix), 'w', encoding='utf8')
+        writer = csv.DictWriter(file_out, fieldnames=csv_record_dict.keys(),
+                                quoting=csv.QUOTE_NONNUMERIC)
 
-            file_out = open('{}/{}.csv'.format(dir_path, file_suffix), 'w')
-            writer = csv.DictWriter(file_out, fieldnames=csv_record_dict.keys(),
-                                    quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
-        else:
-            file_out = open('{}/{}.csv'.format(dir_path, file_suffix), 'w', encoding='utf8')
-            writer = csv.DictWriter(file_out, fieldnames=csv_record_dict.keys(),
-                                    quoting=csv.QUOTE_NONNUMERIC)
-
-        def file_out_close():
-            # type: () -> None
+        def file_out_close() -> None:
             LOGGER.info('Closing file IO {}'.format(file_out))
             file_out.close()
         self._closer.register(file_out_close)
@@ -188,14 +173,12 @@ class FsNeo4jCSVLoader(Loader):
 
         return writer
 
-    def close(self):
-        # type: () -> None
+    def close(self) -> None:
         """
         Any closeable callable registered in _closer, it will close.
         :return:
         """
         self._closer.close()
 
-    def get_scope(self):
-        # type: () -> str
+    def get_scope(self) -> str:
         return "loader.filesystem_csv_neo4j"

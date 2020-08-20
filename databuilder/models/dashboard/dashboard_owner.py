@@ -1,6 +1,9 @@
+# Copyright Contributors to the Amundsen project.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 
-from typing import Optional, Dict, Any, Union, Iterator  # noqa: F401
+from typing import Optional, Dict, Any, Union, Iterator
 
 from databuilder.models.dashboard.dashboard_metadata import DashboardMetadata
 from databuilder.models.neo4j_csv_serde import (
@@ -24,13 +27,13 @@ class DashboardOwner(Neo4jCsvSerializable):
     EXECUTION_DASHBOARD_RELATION_TYPE = 'LAST_EXECUTION_OF'
 
     def __init__(self,
-                 dashboard_group_id,  # type: str
-                 dashboard_id,  # type: str
-                 email,  # type: str
-                 product='',  # type: Optional[str]
-                 cluster='gold',  # type: str
-                 **kwargs
-                 ):
+                 dashboard_group_id: str,
+                 dashboard_id: str,
+                 email: str,
+                 product: Optional[str] = '',
+                 cluster: str = 'gold',
+                 **kwargs: Any
+                 ) -> None:
         self._dashboard_group_id = dashboard_group_id
         self._dashboard_id = dashboard_id
         self._email = email
@@ -39,19 +42,16 @@ class DashboardOwner(Neo4jCsvSerializable):
 
         self._relation_iterator = self._create_relation_iterator()
 
-    def create_next_node(self):
-        # type: () -> Union[Dict[str, Any], None]
+    def create_next_node(self) -> Union[Dict[str, Any], None]:
         return None
 
-    def create_next_relation(self):
-        # type: () -> Union[Dict[str, Any], None]
+    def create_next_relation(self) -> Union[Dict[str, Any], None]:
         try:
             return next(self._relation_iterator)
         except StopIteration:
             return None
 
-    def _create_relation_iterator(self):
-        # type: () -> Iterator[[Dict[str, Any]]]
+    def _create_relation_iterator(self) -> Iterator[Dict[str, Any]]:
         yield {
             RELATION_START_LABEL: DashboardMetadata.DASHBOARD_NODE_LABEL,
             RELATION_END_LABEL: User.USER_NODE_LABEL,
@@ -66,7 +66,7 @@ class DashboardOwner(Neo4jCsvSerializable):
             RELATION_REVERSE_TYPE: OWNER_OF_OBJECT_RELATION_TYPE
         }
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return 'DashboardOwner({!r}, {!r}, {!r}, {!r}, {!r})'.format(
             self._dashboard_group_id,
             self._dashboard_id,

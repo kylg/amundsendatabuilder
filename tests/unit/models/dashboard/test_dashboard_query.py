@@ -1,3 +1,6 @@
+# Copyright Contributors to the Amundsen project.
+# SPDX-License-Identifier: Apache-2.0
+
 import unittest
 
 from databuilder.models.dashboard.dashboard_query import DashboardQuery
@@ -8,8 +11,7 @@ from databuilder.models.neo4j_csv_serde import NODE_KEY, \
 
 class TestDashboardQuery(unittest.TestCase):
 
-    def test_create_nodes(self):
-        # type: () -> None
+    def test_create_nodes(self) -> None:
 
         dashboard_query = DashboardQuery(dashboard_group_id='dg_id',
                                          dashboard_id='d_id',
@@ -26,8 +28,7 @@ class TestDashboardQuery(unittest.TestCase):
 
         self.assertEqual(expected, actual)
 
-    def test_create_relation(self):
-        # type: () -> None
+    def test_create_relation(self) -> None:
         dashboard_query = DashboardQuery(dashboard_group_id='dg_id',
                                          dashboard_id='d_id',
                                          query_id='q_id',

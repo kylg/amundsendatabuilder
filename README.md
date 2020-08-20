@@ -1,8 +1,8 @@
 # Amundsen Databuilder
 
 [![PyPI version](https://badge.fury.io/py/amundsen-databuilder.svg)](https://badge.fury.io/py/amundsen-databuilder)
-[![Build Status](https://api.travis-ci.com/lyft/amundsendatabuilder.svg?branch=master)](https://travis-ci.com/lyft/amundsendatabuilder)
-[![Coverage Status](https://img.shields.io/codecov/c/github/lyft/amundsendatabuilder/master.svg)](https://codecov.io/github/lyft/amundsendatabuilder?branch=master)
+[![Build Status](https://api.travis-ci.org/amundsen-io/amundsendatabuilder.svg?branch=master)](https://travis-ci.org/amundsen-io/amundsendatabuilder)
+[![Coverage Status](https://img.shields.io/codecov/c/github/amundsen-io/amundsendatabuilder/master.svg)](https://codecov.io/github/amundsen-io/amundsendatabuilder?branch=master)
 [![License](http://img.shields.io/:license-Apache%202-blue.svg)](LICENSE)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/amundsen-databuilder.svg)](https://pypi.org/project/amundsen-databuilder/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
@@ -13,10 +13,10 @@ Amundsen Databuilder is a data ingestion library, which is inspired by [Apache G
 For information about Amundsen and our other services, visit the [main repository](https://github.com/lyft/amundsen#amundsen) `README.md` . Please also see our instructions for a [quick start](https://github.com/lyft/amundsen/blob/master/docs/installation.md#bootstrap-a-default-version-of-amundsen-using-docker) setup  of Amundsen with dummy data, and an [overview of the architecture](https://github.com/lyft/amundsen/blob/master/docs/architecture.md#architecture).
 
 ## Requirements
-- Python = 2.7.x or Python >= 3.6.x
+- Python >= 3.6.x
 
 ## Doc
-- https://lyft.github.io/amundsen/
+- https://www.amundsen.io/amundsen/
 
 ## Concept
 ETL job consists of extraction of records from the source, transform records, if necessary, and load records into the sink. Amundsen Databuilder is a ETL framework for Amundsen and there are corresponding components for ETL called Extractor, Transformer, and Loader that deals with record level operation. A component called task controls all these three components.
@@ -615,6 +615,46 @@ A Extractor that extracts Mode dashboard's accumulated view count.
 Note that this provides accumulated view count which does [not effectively show relevancy](./docs/dashboard_ingestion_guide.md#21-ingest-dashboard-usage-data-and-decorate-neo4j-over-base-data). Thus, fields from this extractor is not directly compatible with [DashboardUsage](./docs/models.md#dashboardusage) model.
 
 If you are fine with `accumulated usage`, you could use TemplateVariableSubstitutionTransformer to transform Dict payload from [ModeDashboardUsageExtractor](./databuilder/extractor/dashboard/mode_analytics/mode_dashboard_usage_extractor.py) to fit [DashboardUsage](./docs/models.md#dashboardusage) and transform Dict to  [DashboardUsage](./docs/models.md#dashboardusage) by [TemplateVariableSubstitutionTransformer](./databuilder/transformer/template_variable_substitution_transformer.py), and [DictToModel](./databuilder/transformer/dict_to_model.py) transformers. ([Example](./databuilder/extractor/dashboard/mode_analytics/mode_dashboard_queries_extractor.py#L36) on how to combining these two transformers)
+
+### [RedashDashboardExtractor](./databuilder/extractor/dashboard/redash/redash_dashboard_extractor.py)
+
+The included `RedashDashboardExtractor` provides support for extracting basic metadata for Redash dashboards (dashboard name, owner, URL, created/updated timestamps, and a generated description) and their associated queries (query name, URL, and raw query). It can be extended with a configurable table parser function to also support extraction of `DashboardTable` metadata. (See below for example usage.)
+
+Note: `DashboardUsage` and `DashboardExecution` metadata are not supported in this extractor, as these concepts are not supported by the Redash API.
+
+The `RedashDashboardExtractor` depends on the following Redash API endpoints: `GET /api/dashboards`, `GET /api/dashboards/<dashboard-slug>`. It has been tested against Redash 8 and is also expected to work with Redash 9.
+
+```python
+extractor = RedashDashboardExtractor()
+task = DefaultTask(extractor=extractor, loader=FsNeo4jCSVLoader())
+
+job_config = ConfigFactory.from_dict({
+	'extractor.redash_dashboard.redash_base_url': redash_base_url, # ex: https://redash.example.org
+	'extractor.redash_dashboard.api_base_url': api_base_url, # ex: https://redash.example.org/api
+	'extractor.redash_dashboard.api_key': api_key, # ex: abc1234
+	'extractor.redash_dashboard.table_parser': table_parser # ex: my_library.module.parse_tables
+})
+
+job = DefaultJob(conf=job_config,
+                 task=task,
+                 publisher=Neo4jCsvPublisher())
+job.launch()
+```
+
+#### RedashDashboardExtractor: table_parser
+
+The `RedashDashboardExtractor` extracts raw queries from each dashboard. You may optionally use these queries to parse out relations to tables in Amundsen. A table parser can be provided in the configuration for the `RedashDashboardExtractor`, as seen above. This function should have type signature `(RedashVisualizationWidget) -> Iterator[TableRelationData]`. For example:
+
+```python
+def parse_tables(viz_widget: RedashVisualiationWidget) -> Iterator[TableRelationData]:
+	# Each viz_widget corresponds to one query.
+	# viz_widget.data_source_id is the ID of the target DB in Redash.
+	# viz_widget.raw_query is the raw query (e.g., SQL).
+	if viz_widget.data_source_id == 123:
+		table_names = some_sql_parser(viz_widget.raw_query)
+		return [TableRelationData('some_db', 'prod', 'some_schema', tbl) for tbl in table_names]
+	return []
+```
 
 
 ## List of transformers

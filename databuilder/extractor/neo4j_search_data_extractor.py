@@ -1,7 +1,10 @@
-import textwrap
-from typing import Any  # noqa: F401
+# Copyright Contributors to the Amundsen project.
+# SPDX-License-Identifier: Apache-2.0
 
-from pyhocon import ConfigTree  # noqa: F401
+import textwrap
+from typing import Any
+
+from pyhocon import ConfigTree
 
 from databuilder import Scoped
 from databuilder.extractor.base_extractor import Extractor
@@ -117,8 +120,7 @@ class Neo4jSearchDataExtractor(Extractor):
         'dashboard': DEFAULT_NEO4J_DASHBOARD_CYPHER_QUERY
     }
 
-    def init(self, conf):
-        # type: (ConfigTree) -> None
+    def init(self, conf: ConfigTree) -> None:
         """
         Initialize Neo4jExtractor object from configuration and use that for extraction
         """
@@ -139,33 +141,30 @@ class Neo4jSearchDataExtractor(Extractor):
         # initialize neo4j_extractor from configs
         self.neo4j_extractor.init(Scoped.get_scoped_conf(self.conf, self.neo4j_extractor.get_scope()))
 
-    def close(self):
-        # type: () -> None
+    def close(self) -> None:
         """
         Use close() method specified by neo4j_extractor
         to close connection to neo4j cluster
         """
         self.neo4j_extractor.close()
 
-    def extract(self):
-        # type: () -> Any
+    def extract(self) -> Any:
         """
         Invoke extract() method defined by neo4j_extractor
         """
         return self.neo4j_extractor.extract()
 
-    def get_scope(self):
-        # type: () -> str
+    def get_scope(self) -> str:
         return 'extractor.search_data'
 
-    def _add_publish_tag_filter(self, publish_tag, cypher_query):
+    def _add_publish_tag_filter(self, publish_tag: str, cypher_query: str) -> str:
         """
         Adds publish tag filter into Cypher query
         :param publish_tag: value of publish tag.
         :param cypher_query:
         :return:
         """
-        # type: (str, str) -> str
+
         if not publish_tag:
             publish_tag_filter = ''
         else:
