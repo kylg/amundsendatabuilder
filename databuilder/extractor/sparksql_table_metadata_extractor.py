@@ -2,20 +2,27 @@ import logging
 from collections import namedtuple
 from typing import Iterator, Union, Dict, Any  # noqa: F401
 
-from databuilder import Scoped
 from databuilder.extractor.base_extractor import Extractor
 from databuilder.models.table_last_updated import TableLastUpdated
 from databuilder.models.table_metadata import TableMetadata, ColumnMetadata
 from databuilder.models.table_stats import TableColumnStats
 from databuilder.models.watermark import Watermark
 from databuilder.models.table_source import TableSource
-from databuilder.models.table_generator import TableGenerator
+from databuilder.models.application import Application
 from itertools import groupby
-import mysql.connector
+import re
+# import mysql.connector
 
 TableKey = namedtuple('TableKey', ['dbName', 'tblName'])
 
 LOGGER = logging.getLogger(__name__)
+
+
+
+punctuation = '.!,;:?/"\''
+def removePunctuation(text):
+    text = re.sub(r'[{}]+'.format(punctuation),'',text)
+    return text.strip()
 
 
 class DagDef:
@@ -42,8 +49,7 @@ class SparksqlTableMetadataExtractor(Extractor):
             reader = csv.reader(f)
             data = list(reader)
 
-        print(data)
-        if (len(data) < 1):
+        if len(data) < 1:
             LOGGER.info('no data from csv: {}'.format(csv_file))
             return
 
@@ -59,30 +65,30 @@ class SparksqlTableMetadataExtractor(Extractor):
 
     def _init_airflow_ids(self):
         self.dag_defs = {}
-        for db_info in self.airflow_servers:
-            db = mysql.connector.connect(
-                host=db_info["host"],
-                port=db_info["port"],
-                user=db_info["user"],
-                password=db_info["password"],
-                database="airflow"
-            )
-            cursor = db.cursor()
-            cursor.execute('SELECT dag_id,is_active,fileloc FROM dag')
-            result = cursor.fetchall()
-            for row in result:
-                dag_id = row[0]
-                if dag_id in self.dag_defs.keys():
-                    # if a dag_id reside in multiple airflow, choose the active one
-                    if not row[1]:
-                        continue
-                url = "{server}/tree?dag_id={dag_id}".format(server=db_info["server"], dag_id=dag_id)
-                self.dag_defs[dag_id] = DagDef(dag_id, row[1], row[2], url)
+    #     for db_info in self.airflow_servers:
+    #         db = mysql.connector.connect(
+    #             host=db_info["host"],
+    #             port=db_info["port"],
+    #             user=db_info["user"],
+    #             password=db_info["password"],
+    #             database="airflow"
+    #         )
+    #         cursor = db.cursor()
+    #         cursor.execute('SELECT dag_id,is_active,fileloc FROM dag')
+    #         result = cursor.fetchall()
+    #         for row in result:
+    #             dag_id = row[0]
+    #             if dag_id in self.dag_defs.keys():
+    #                 # if a dag_id reside in multiple airflow, choose the active one
+    #                 if not row[1]:
+    #                     continue
+    #             url = db_info["server"]+"/tree?dag_id={dag_id}"
+    #             self.dag_defs[dag_id] = DagDef(dag_id, row[1], row[2], url)
 
-    def get_airflow_link(self, dag_id):
+    def get_airflow_link_template(self, dag_id):
         if dag_id in self.dag_defs.keys():
             return self.dag_defs[dag_id].url
-        return "{server}/tree?dag_id={dag_id}".format(server=self.default_airflow_server, dag_id=dag_id)
+        return self.default_airflow_server+"/tree?dag_id={dag_id}"
 
     def extract(self):
         # type: () -> Union[TableMetadata, None]
@@ -110,9 +116,10 @@ class SparksqlTableMetadataExtractor(Extractor):
             colStats = []
             for row in group:
                 last_row = row
+                col_name = removePunctuation(row[self.pos_dict["colName"]])
                 if row[self.pos_dict["isPartition"]] != 'false':
-                    partitionKeys.append(row[self.pos_dict["colName"]])
-                columns.append(ColumnMetadata(row[self.pos_dict["colName"]], row[self.pos_dict["colDesc"]],
+                    partitionKeys.append(col_name)
+                columns.append(ColumnMetadata(col_name, row[self.pos_dict["colDesc"]],
                                               row[self.pos_dict["colType"]], row[self.pos_dict["colSortOrder"]]))
                 self._create_stats(row, cluster, colStats)
 
@@ -120,20 +127,20 @@ class SparksqlTableMetadataExtractor(Extractor):
             partitionStr = ""
             if len(partitionKeys) > 0:
                 partitionStr = ",".join(partitionKeys)
-            LOGGER.debug("partitionStr=" + partitionStr)
+            LOGGER.debug("partitionStr={partition}".format(partition=partitionStr))
             dbName = last_row[self.pos_dict['dbName']]
             tblName = last_row[self.pos_dict['tblName']]
-
+            LOGGER.info("yield table: {dbName}.{tblName}".format(dbName=dbName, tblName=tblName))
             yield TableMetadata(dbName, cluster, dbName, tblName,
                                 last_row[self.pos_dict['tblDesc']],
                                 columns,
                                 is_view=is_view,
                                 partitionKeys=partitionStr,
                                 tblLocation=last_row[self.pos_dict["tblLocation"]])
-
-            if last_row[self.pos_dict['lastUpdateTime']] > 0:
+            lut_str = last_row[self.pos_dict['lastUpdateTime']]
+            if lut_str and int(lut_str) > 0:
                 yield TableLastUpdated(tblName,
-                                       last_row[self.pos_dict['lastUpdateTime']],
+                                       int(lut_str),
                                        dbName, dbName, cluster)
             if last_row[self.pos_dict['p0Name']] is not None and last_row[self.pos_dict['p0Name']] != '':
                 yield Watermark(last_row[self.pos_dict['p0Time']], dbName, dbName, tblName,
@@ -144,7 +151,7 @@ class SparksqlTableMetadataExtractor(Extractor):
             source = self._create_source(dbName, dbName, tblName, cluster, last_row[self.pos_dict['source']])
             if source:
                 yield source
-            generator = self._create_generator(dbName, dbName, tblName, cluster, last_row[self.pos_dict['pipeline']])
+            generator = self._create_application(dbName, dbName, tblName, cluster, last_row[self.pos_dict['pipeline']])
             if generator:
                 yield generator
 
@@ -162,7 +169,7 @@ class SparksqlTableMetadataExtractor(Extractor):
         min = row[self.pos_dict["min"]]
         avgLen = row[self.pos_dict["avgLen"]]
         maxLen = row[self.pos_dict["maxLen"]]
-        LOGGER.info("stat===" + str(nullCount) + "," + str(distinctCount) + "," + str(max) + "," + str(min) + "," + str(
+        LOGGER.debug("stat===" + str(nullCount) + "," + str(distinctCount) + "," + str(max) + "," + str(min) + "," + str(
             avgLen) + "," + str(maxLen))
         if nullCount is not None and len(str(nullCount).strip()) > 0:
             colStats.append(
@@ -191,12 +198,12 @@ class SparksqlTableMetadataExtractor(Extractor):
         else:
             return None
 
-    def _create_generator(self, db_name, schema, table_name, cluster, pipeline):
+    def _create_application(self, db_name, schema, table_name, cluster, pipeline):
         if pipeline:
-            url = self.get_airflow_link(pipeline)
-            if not url:
-                url = pipeline
-            return TableGenerator(db_name, schema, table_name, cluster, url, 'airflow')
+            url_template = self.get_airflow_link_template(pipeline)
+            if not url_template:
+                url_template = pipeline
+            return Application('', pipeline, url_template, db_name, cluster, schema, table_name)
         else:
             return None
 
