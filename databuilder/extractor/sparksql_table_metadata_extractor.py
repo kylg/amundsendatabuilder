@@ -65,6 +65,7 @@ class SparksqlTableMetadataExtractor(Extractor):
 
     def _init_airflow_ids(self):
         self.dag_defs = {}
+        # once there are more than 1 airflow setup, needs to read the db of airflow to decide which airflow the dag belongs to
     #     for db_info in self.airflow_servers:
     #         db = mysql.connector.connect(
     #             host=db_info["host"],
